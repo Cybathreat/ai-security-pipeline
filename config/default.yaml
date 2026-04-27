@@ -1,0 +1,26 @@
+pipeline:
+  name: "AI Security Pipeline — Full Audit"
+  modules:
+    - mcp_security
+    - llm_runtime
+    - jailbreak
+
+output:
+  formats:
+    - json
+    - markdown
+  directory: ./reports
+  min_severity: low
+
+settings:
+  mcp_security:
+    auth_required: true
+    sandbox_enabled: true
+  llm_runtime:
+    verify_signatures: true
+    enforce_https: true
+  jailbreak:
+    techniques:
+      - dan
+      - persona
+      - roleplay
