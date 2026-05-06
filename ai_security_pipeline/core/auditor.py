@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from .scanner import Finding, Severity
@@ -12,7 +12,7 @@ from .scanner import Finding, Severity
 class AuditResult:
     auditor_name: str
     target: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     findings: List[Finding] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -20,11 +20,19 @@ class AuditResult:
 
     @property
     def severity_counts(self) -> Dict[str, int]:
-        from .scanner import Severity
         counts = {s.value: 0 for s in Severity}
         for finding in self.findings:
             counts[finding.severity.value] += 1
         return counts
+
+    def filter_by_min_severity(self, min_severity: Severity) -> "AuditResult":
+        order = [Severity.INFO, Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
+        if min_severity not in order:
+            return self
+        idx = order.index(min_severity)
+        allowed = set(order[idx:])
+        self.findings = [f for f in self.findings if f.severity in allowed]
+        return self
 
 
 class BaseAuditor(ABC):
@@ -56,5 +64,5 @@ class BaseAuditor(ABC):
             target=str(target),
             findings=list(self._findings),
             errors=list(self._errors),
-            passed=len(self._findings) == 0,
+            passed=len([f for f in self._findings if f.severity in (Severity.CRITICAL, Severity.HIGH)]) == 0,
         )

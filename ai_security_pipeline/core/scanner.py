@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -15,6 +15,8 @@ class Severity(Enum):
     INFO = "info"
 
     def __lt__(self, other):
+        if not isinstance(other, Severity):
+            return NotImplemented
         order = [Severity.INFO, Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
         return order.index(self) < order.index(other)
 
@@ -31,12 +33,25 @@ class Finding:
     references: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "rule_id": self.rule_id,
+            "title": self.title,
+            "description": self.description,
+            "severity": self.severity.value,
+            "category": self.category,
+            "location": self.location,
+            "remediation": self.remediation,
+            "references": self.references,
+            "metadata": self.metadata,
+        }
+
 
 @dataclass
 class ScanResult:
     scanner_name: str
     target: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     findings: List[Finding] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -50,6 +65,15 @@ class ScanResult:
 
     def get_findings_by_severity(self, severity: Severity) -> List[Finding]:
         return [f for f in self.findings if f.severity == severity]
+
+    def filter_by_min_severity(self, min_severity: Severity) -> "ScanResult":
+        order = [Severity.INFO, Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
+        if min_severity not in order:
+            return self
+        idx = order.index(min_severity)
+        allowed = set(order[idx:])
+        self.findings = [f for f in self.findings if f.severity in allowed]
+        return self
 
 
 class BaseScanner(ABC):
